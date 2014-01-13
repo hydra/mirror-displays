@@ -19,8 +19,56 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ History:
+ 
+ v1.0 - Initial release by Fabian Canas
+ 
+ v2.0 - Dominic Clifton <me@dominicclifton.name>
+      + Added support for more than 2 monitors.
+      + Removed much of the duplicated logic and code.
+      + Updated naming of methods and variables to improve code readability.
+*/
+
 #import <Foundation/Foundation.h>
 #import <ApplicationServices/ApplicationServices.h>
+
+#define MAX_SUPPORTED_DISPLAYS 10
+#define MAX_OTHER_DISPLAYS (MAX_SUPPORTED_DISPLAYS - 1)
+
+int otherDisplayCount = 0;
+CGDirectDisplayID otherDisplays[MAX_OTHER_DISPLAYS];
+
+void addOtherDisplay(CGDirectDisplayID otherDisplay) {
+    for (unsigned int otherDisplayIndex = 0; otherDisplayIndex < otherDisplayCount; otherDisplayIndex++) {
+        if (otherDisplays[otherDisplayIndex] == otherDisplay) {
+            return;
+        }
+    }
+    otherDisplays[otherDisplayCount++] = otherDisplay;
+}
+
+CGError mirror(CGDisplayConfigRef configRef, CGDirectDisplayID mainDisplay, CGDirectDisplayID otherDisplays[], unsigned int otherDisplaysCount) {
+    
+    CGError err = 0;
+    unsigned int otherDisplayIndex = 0;
+
+    while (otherDisplayIndex < otherDisplaysCount && err == 0) {
+        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplays[otherDisplayIndex++], mainDisplay);
+    };
+    return err;
+}
+
+CGError unmirror(CGDisplayConfigRef configRef, CGDirectDisplayID otherDisplays[], unsigned int otherDisplaysCount) {
+    CGError err = 0;
+    unsigned int otherDisplayIndex = 0;
+    
+    while (otherDisplayIndex < otherDisplaysCount && err == 0) {
+        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplays[otherDisplayIndex++], kCGNullDirectDisplay);
+    };
+    return err;
+    return err;
+}
 
 int main (int argc, const char * argv[]) {
 	NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
@@ -83,11 +131,11 @@ int main (int argc, const char * argv[]) {
 	CGDisplayCount numberOfActiveDspys;
 	CGDisplayCount numberOfOnlineDspys;
 	
-	CGDisplayCount numberOfTotalDspys = 2; // The number of total displays I'm interested in
+	CGDisplayCount numberOfTotalDspys = MAX_SUPPORTED_DISPLAYS; // The number of total displays I'm interested in
 	
 	CGDirectDisplayID activeDspys[] = {0,0};
 	CGDirectDisplayID onlineDspys[] = {0,0};
-	CGDirectDisplayID secondaryDspy;
+	CGDirectDisplayID mainDisplay;
 	
 	CGDisplayErr activeError = CGGetActiveDisplayList (numberOfTotalDspys,activeDspys,&numberOfActiveDspys);
 	
@@ -96,63 +144,54 @@ int main (int argc, const char * argv[]) {
 	CGDisplayErr onlineError = CGGetOnlineDisplayList (numberOfTotalDspys,onlineDspys,&numberOfOnlineDspys);
 	
 	if (onlineError!=0) NSLog(@"Error in obtaining online diplay list: %d\n",onlineError);
-	
-	if (numberOfOnlineDspys==2) { // Right now we're only dealing with two available monitors
-		
-		if (onlineDspys[0]==CGMainDisplayID()){
-			secondaryDspy = onlineDspys[1];
-		} else {
-			secondaryDspy = onlineDspys[0];
-		}
-		
-		CGDisplayConfigRef configRef;
-		CGError err = CGBeginDisplayConfiguration (&configRef);
-		if (err != 0) NSLog(@"Error with CGBeginDisplayConfiguration: %d\n",err);
-		// Experimental Code for changing the color and timing for the fade effect.
-		//CGError fadeChangeError;
-		//fadeChangeError = CGConfigureDisplayFadeEffect (configRef,1.5,1.5,0.0,0.0,0.0);
-		//if (fadeChangeError!= 0) NSLog(@"Error with CGConfigureDisplayFadeEffect %d\n",fadeChangeError);
-		
-		switch (mode) {
-			case toggle:
-				if (numberOfActiveDspys==2) { // Displays are unmirrored -> mirror them
-					err = CGConfigureDisplayMirrorOfDisplay (configRef,secondaryDspy,CGMainDisplayID());
-				} else { // Displays are mirrored -> unmirror them
-					err = CGConfigureDisplayMirrorOfDisplay (configRef,secondaryDspy,kCGNullDirectDisplay);
-				}
-				break;
-			case on:
-				if (numberOfActiveDspys==2)
-					err = CGConfigureDisplayMirrorOfDisplay (configRef,secondaryDspy,CGMainDisplayID());
-				//else return 0;
-				break;
-			case off:
-				if (numberOfActiveDspys!=2)
-					err = CGConfigureDisplayMirrorOfDisplay (configRef,secondaryDspy,kCGNullDirectDisplay);
-				//else return 0;
-				break;
-			case query:
-				if (numberOfActiveDspys==2) { // Displays are unmirrored
-					printf("off\n");
-				} else { // Displays are mirrored
-					printf("on\n");
-				}
-				break;
-			default:
-				break;
-		}
-		if (err != 0) NSLog(@"Error with the switch commands!: %d\n",err);
-		
-		// Apply the changes
-		err = CGCompleteDisplayConfiguration (configRef,kCGConfigurePermanently);
-		if (err != 0) NSLog(@"Error with CGCompleteDisplayConfiguration: %d\n",err);
-	} else {
-    if (numberOfOnlineDspys>2) {
-      printf("Cannot handle more than 2 displays at this time. %d displays detected.\n",numberOfOnlineDspys);
-    } else {
-      printf("No secondary display detected.\n");
+			
+    mainDisplay = CGMainDisplayID();
+    
+    for (int displayIndex = 0; displayIndex < numberOfActiveDspys; displayIndex++) {
+        CGDirectDisplayID otherDisplay = activeDspys[displayIndex];
+        if (otherDisplay != mainDisplay) {
+            addOtherDisplay(otherDisplay);
+        }
     }
-  }
+
+    for (int displayIndex = 0; displayIndex < numberOfOnlineDspys; displayIndex++) {
+        CGDirectDisplayID otherDisplay = onlineDspys[displayIndex];
+        if (otherDisplay != mainDisplay) {
+            addOtherDisplay(otherDisplay);
+        }
+    }
+
+    CGDisplayConfigRef configRef;
+    CGError err = CGBeginDisplayConfiguration (&configRef);
+    if (err != 0) NSLog(@"Error with CGBeginDisplayConfiguration: %d\n",err);
+
+    BOOL isMirroringActive = !(numberOfActiveDspys == numberOfOnlineDspys);
+    
+    switch (mode) {
+        case toggle:
+            if (isMirroringActive) {
+                err = unmirror(configRef, otherDisplays, otherDisplayCount);
+            } else {
+                err = mirror(configRef, mainDisplay, otherDisplays, otherDisplayCount);
+            }
+            break;
+        case on:
+            err = mirror(configRef, mainDisplay, otherDisplays, otherDisplayCount);
+            break;
+        case off:
+            err = unmirror(configRef, otherDisplays, otherDisplayCount);
+            break;
+        case query:
+            printf("%s\n", isMirroringActive ? "on" : "off");
+            break;
+        default:
+            break;
+    }
+    if (err != 0) NSLog(@"Error with the switch commands!: %d\n",err);
+    
+    // Apply the changes
+    err = CGCompleteDisplayConfiguration (configRef,kCGConfigurePermanently);
+    if (err != 0) NSLog(@"Error with CGCompleteDisplayConfiguration: %d\n",err);
 
 	
     return 0;	
