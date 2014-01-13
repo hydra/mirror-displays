@@ -39,6 +39,16 @@
 int otherDisplayCount = 0;
 CGDirectDisplayID otherDisplays[MAX_OTHER_DISPLAYS];
 
+void showHelp(void) {
+    printf("Mirror Displays version 1.03\nCopyright 2009, Fabián Cañas\n");
+    printf("usage: mirror [option]\tPassing more than one option produces undefined behavior.");
+    printf("\n  -h\t\tPrint this usage and exit.");
+    printf("\n  -t\t\tToggle mirroring (default behavior)");
+    printf("\n  -on\t\tTurn Mirroring On");
+    printf("\n  -off\t\tTurn Mirroring Off");
+    printf("\n  -q\t\tQuery the Mirroring state and write \"on\" or \"off\" to stdout");
+    printf("\n");
+}
 void addOtherDisplay(CGDirectDisplayID otherDisplay) {
     for (unsigned int otherDisplayIndex = 0; otherDisplayIndex < otherDisplayCount; otherDisplayIndex++) {
         if (otherDisplays[otherDisplayIndex] == otherDisplay) {
@@ -46,6 +56,28 @@ void addOtherDisplay(CGDirectDisplayID otherDisplay) {
         }
     }
     otherDisplays[otherDisplayCount++] = otherDisplay;
+}
+
+void buildOtherDisplayList(
+                           CGDirectDisplayID mainDisplay,
+                           CGDirectDisplayID activeDspys[],
+                           CGDisplayCount numberOfActiveDspys,
+                           CGDirectDisplayID onlineDspys[],
+                           CGDisplayCount numberOfOnlineDspys
+                           ) {
+    for (CGDisplayCount displayIndex = 0; displayIndex < numberOfActiveDspys; displayIndex++) {
+        CGDirectDisplayID otherDisplay = activeDspys[displayIndex];
+        if (otherDisplay != mainDisplay) {
+            addOtherDisplay(otherDisplay);
+        }
+    }
+    
+    for (CGDisplayCount displayIndex = 0; displayIndex < numberOfOnlineDspys; displayIndex++) {
+        CGDirectDisplayID otherDisplay = onlineDspys[displayIndex];
+        if (otherDisplay != mainDisplay) {
+            addOtherDisplay(otherDisplay);
+        }
+    }
 }
 
 CGError mirror(CGDisplayConfigRef configRef, CGDirectDisplayID mainDisplay, CGDirectDisplayID otherDisplays[], unsigned int otherDisplaysCount) {
@@ -67,31 +99,27 @@ CGError unmirror(CGDisplayConfigRef configRef, CGDirectDisplayID otherDisplays[]
         err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplays[otherDisplayIndex++], kCGNullDirectDisplay);
     };
     return err;
-    return err;
 }
 
-int main (int argc, const char * argv[]) {
-	NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-	
+enum MirrorMode {
+    help,
+    on,
+    off,
+    toggle,
+    query
+} mode;
+
+enum MirrorMode determineMode() {
 	NSArray *args = [[NSProcessInfo processInfo] arguments];
     NSCountedSet *cset = [[NSCountedSet alloc] initWithArray:args];
     NSArray *sorted_args = [[cset allObjects]
 							sortedArrayUsingSelector:@selector(compare:)];
     NSEnumerator *enm = [sorted_args objectEnumerator];
     id word;
-	
-	enum MirrorMode {
-		help,
-		on,
-		off,
-		toggle,
-		query
-	} mode;
-	
+    
 	mode = toggle;
 	
     while (word = [enm nextObject]) {
-//        printf("%s\n", [word UTF8String]);
 		if (strcmp([word UTF8String], "-h")==0){
 			mode = help;
 			break;
@@ -113,58 +141,38 @@ int main (int argc, const char * argv[]) {
 			break;
 		}
     }
+    
     [cset release];
-	[pool drain];
-	// Ending Objective-C code. Don't need a pool anymore?
-	if (mode == help){
-		printf("Mirror Displays version 1.03\nCopyright 2009, Fabián Cañas\n");
-		printf("usage: mirror [option]\tPassing more than one option produces undefined behavior.");
-		printf("\n  -h\t\tPrint this usage and exit.");
-		printf("\n  -t\t\tToggle mirroring (default behavior)");
-		printf("\n  -on\t\tTurn Mirroring On");
-		printf("\n  -off\t\tTurn Mirroring Off");
-		printf("\n  -q\t\tQuery the Mirroring state and write \"on\" or \"off\" to stdout");
-		printf("\n");
-		return 0;
-	}
-	
+
+    return mode;
+}
+
+int process(enum MirrorMode mode) {
 	CGDisplayCount numberOfActiveDspys;
 	CGDisplayCount numberOfOnlineDspys;
 	
 	CGDisplayCount numberOfTotalDspys = MAX_SUPPORTED_DISPLAYS; // The number of total displays I'm interested in
 	
-	CGDirectDisplayID activeDspys[] = {0,0};
-	CGDirectDisplayID onlineDspys[] = {0,0};
+	CGDirectDisplayID activeDspys[MAX_SUPPORTED_DISPLAYS];
+	CGDirectDisplayID onlineDspys[MAX_SUPPORTED_DISPLAYS];
 	CGDirectDisplayID mainDisplay;
 	
-	CGDisplayErr activeError = CGGetActiveDisplayList (numberOfTotalDspys,activeDspys,&numberOfActiveDspys);
+	CGDisplayErr activeError = CGGetActiveDisplayList (numberOfTotalDspys, activeDspys, &numberOfActiveDspys);
 	
 	if (activeError!=0) NSLog(@"Error in obtaining active diplay list: %d\n",activeError);
 	
-	CGDisplayErr onlineError = CGGetOnlineDisplayList (numberOfTotalDspys,onlineDspys,&numberOfOnlineDspys);
+	CGDisplayErr onlineError = CGGetOnlineDisplayList (numberOfTotalDspys, onlineDspys, &numberOfOnlineDspys);
 	
 	if (onlineError!=0) NSLog(@"Error in obtaining online diplay list: %d\n",onlineError);
-			
+    
     mainDisplay = CGMainDisplayID();
     
-    for (int displayIndex = 0; displayIndex < numberOfActiveDspys; displayIndex++) {
-        CGDirectDisplayID otherDisplay = activeDspys[displayIndex];
-        if (otherDisplay != mainDisplay) {
-            addOtherDisplay(otherDisplay);
-        }
-    }
-
-    for (int displayIndex = 0; displayIndex < numberOfOnlineDspys; displayIndex++) {
-        CGDirectDisplayID otherDisplay = onlineDspys[displayIndex];
-        if (otherDisplay != mainDisplay) {
-            addOtherDisplay(otherDisplay);
-        }
-    }
-
+    buildOtherDisplayList(mainDisplay, activeDspys, numberOfActiveDspys, onlineDspys, numberOfOnlineDspys);
+    
     CGDisplayConfigRef configRef;
     CGError err = CGBeginDisplayConfiguration (&configRef);
     if (err != 0) NSLog(@"Error with CGBeginDisplayConfiguration: %d\n",err);
-
+    
     BOOL isMirroringActive = !(numberOfActiveDspys == numberOfOnlineDspys);
     
     switch (mode) {
@@ -192,7 +200,24 @@ int main (int argc, const char * argv[]) {
     // Apply the changes
     err = CGCompleteDisplayConfiguration (configRef,kCGConfigurePermanently);
     if (err != 0) NSLog(@"Error with CGCompleteDisplayConfiguration: %d\n",err);
-
-	
-    return 0;	
 }
+
+
+int main (int argc, const char * argv[]) {
+	NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+		
+	mode = determineMode();
+    
+	[pool drain];
+	// Ending Objective-C code. Don't need a pool anymore?
+
+	if (mode == help){
+        showHelp();
+		return 0;
+	}
+	
+    int result = process(mode);
+    
+    return result;
+}
+
