@@ -40,7 +40,7 @@ int otherDisplayCount = 0;
 CGDirectDisplayID otherDisplays[MAX_OTHER_DISPLAYS];
 
 void showHelp(void) {
-    printf("Mirror Displays version 1.03\nCopyright 2009, Fabián Cañas\n");
+    printf("Mirror Displays version 2.00\nCopyright 2009-2014, Fabián Cañas & Dominic Clifton\n");
     printf("usage: mirror [option]\tPassing more than one option produces undefined behavior.");
     printf("\n  -h\t\tPrint this usage and exit.");
     printf("\n  -t\t\tToggle mirroring (default behavior)");
