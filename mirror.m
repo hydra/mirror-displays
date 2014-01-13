@@ -87,7 +87,12 @@ CGError mirror(CGDisplayConfigRef configRef, CGDirectDisplayID mainDisplay, CGDi
     unsigned int otherDisplayIndex = 0;
 
     while (otherDisplayIndex < otherDisplaysCount && err == 0) {
-        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplays[otherDisplayIndex++], mainDisplay);
+        CGDirectDisplayID otherDisplay = otherDisplays[otherDisplayIndex];
+        
+        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplay, mainDisplay);
+        if (err != 0) NSLog(@"Error mirroring display, id: %d, err: %d\n", otherDisplay, err);
+
+        otherDisplayIndex++;
     };
     return err;
 }
@@ -97,7 +102,12 @@ CGError unmirror(CGDisplayConfigRef configRef, CGDirectDisplayID otherDisplays[]
     unsigned int otherDisplayIndex = 0;
     
     while (otherDisplayIndex < otherDisplaysCount && err == 0) {
-        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplays[otherDisplayIndex++], kCGNullDirectDisplay);
+        CGDirectDisplayID otherDisplay = otherDisplays[otherDisplayIndex];
+        
+        err = CGConfigureDisplayMirrorOfDisplay (configRef, otherDisplay, kCGNullDirectDisplay);
+        if (err != 0) NSLog(@"Error unmirroring display, id: %d, err: %d\n", otherDisplay, err);
+
+        otherDisplayIndex++;
     };
     return err;
 }
@@ -171,6 +181,7 @@ int process(enum MirrorMode mode) {
     buildOtherDisplayList(mainDisplay, activeDisplays, activeDisplayCount, onlineDisplays, onlineDisplayCount);
     
     CGDisplayConfigRef configRef;
+    
     CGError err = CGBeginDisplayConfiguration (&configRef);
     if (err != 0) NSLog(@"Error with CGBeginDisplayConfiguration: %d\n",err);
     
@@ -196,11 +207,12 @@ int process(enum MirrorMode mode) {
         default:
             break;
     }
-    if (err != 0) NSLog(@"Error with the switch commands!: %d\n",err);
     
-    // Apply the changes
     err = CGCompleteDisplayConfiguration (configRef,kCGConfigurePermanently);
+    
     if (err != 0) NSLog(@"Error with CGCompleteDisplayConfiguration: %d\n",err);
+    
+    return err;
 }
 
 
