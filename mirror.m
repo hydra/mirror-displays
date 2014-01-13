@@ -49,6 +49,7 @@ void showHelp(void) {
     printf("\n  -q\t\tQuery the Mirroring state and write \"on\" or \"off\" to stdout");
     printf("\n");
 }
+
 void addOtherDisplay(CGDirectDisplayID otherDisplay) {
     for (unsigned int otherDisplayIndex = 0; otherDisplayIndex < otherDisplayCount; otherDisplayIndex++) {
         if (otherDisplays[otherDisplayIndex] == otherDisplay) {
@@ -60,20 +61,20 @@ void addOtherDisplay(CGDirectDisplayID otherDisplay) {
 
 void buildOtherDisplayList(
                            CGDirectDisplayID mainDisplay,
-                           CGDirectDisplayID activeDspys[],
-                           CGDisplayCount numberOfActiveDspys,
-                           CGDirectDisplayID onlineDspys[],
-                           CGDisplayCount numberOfOnlineDspys
+                           CGDirectDisplayID activeDisplays[],
+                           CGDisplayCount activeDisplayCount,
+                           CGDirectDisplayID onlineDisplays[],
+                           CGDisplayCount onlineDisplayCount
                            ) {
-    for (CGDisplayCount displayIndex = 0; displayIndex < numberOfActiveDspys; displayIndex++) {
-        CGDirectDisplayID otherDisplay = activeDspys[displayIndex];
+    for (CGDisplayCount displayIndex = 0; displayIndex < activeDisplayCount; displayIndex++) {
+        CGDirectDisplayID otherDisplay = activeDisplays[displayIndex];
         if (otherDisplay != mainDisplay) {
             addOtherDisplay(otherDisplay);
         }
     }
     
-    for (CGDisplayCount displayIndex = 0; displayIndex < numberOfOnlineDspys; displayIndex++) {
-        CGDirectDisplayID otherDisplay = onlineDspys[displayIndex];
+    for (CGDisplayCount displayIndex = 0; displayIndex < onlineDisplayCount; displayIndex++) {
+        CGDirectDisplayID otherDisplay = onlineDisplays[displayIndex];
         if (otherDisplay != mainDisplay) {
             addOtherDisplay(otherDisplay);
         }
@@ -148,32 +149,32 @@ enum MirrorMode determineMode() {
 }
 
 int process(enum MirrorMode mode) {
-	CGDisplayCount numberOfActiveDspys;
-	CGDisplayCount numberOfOnlineDspys;
+	CGDisplayCount activeDisplayCount;
+	CGDisplayCount onlineDisplayCount;
 	
 	CGDisplayCount numberOfTotalDspys = MAX_SUPPORTED_DISPLAYS; // The number of total displays I'm interested in
 	
-	CGDirectDisplayID activeDspys[MAX_SUPPORTED_DISPLAYS];
-	CGDirectDisplayID onlineDspys[MAX_SUPPORTED_DISPLAYS];
+	CGDirectDisplayID activeDisplays[MAX_SUPPORTED_DISPLAYS];
+	CGDirectDisplayID onlineDisplays[MAX_SUPPORTED_DISPLAYS];
 	CGDirectDisplayID mainDisplay;
 	
-	CGDisplayErr activeError = CGGetActiveDisplayList (numberOfTotalDspys, activeDspys, &numberOfActiveDspys);
+	CGDisplayErr activeError = CGGetActiveDisplayList (numberOfTotalDspys, activeDisplays, &activeDisplayCount);
 	
 	if (activeError!=0) NSLog(@"Error in obtaining active diplay list: %d\n",activeError);
 	
-	CGDisplayErr onlineError = CGGetOnlineDisplayList (numberOfTotalDspys, onlineDspys, &numberOfOnlineDspys);
+	CGDisplayErr onlineError = CGGetOnlineDisplayList (numberOfTotalDspys, onlineDisplays, &onlineDisplayCount);
 	
 	if (onlineError!=0) NSLog(@"Error in obtaining online diplay list: %d\n",onlineError);
     
     mainDisplay = CGMainDisplayID();
     
-    buildOtherDisplayList(mainDisplay, activeDspys, numberOfActiveDspys, onlineDspys, numberOfOnlineDspys);
+    buildOtherDisplayList(mainDisplay, activeDisplays, activeDisplayCount, onlineDisplays, onlineDisplayCount);
     
     CGDisplayConfigRef configRef;
     CGError err = CGBeginDisplayConfiguration (&configRef);
     if (err != 0) NSLog(@"Error with CGBeginDisplayConfiguration: %d\n",err);
     
-    BOOL isMirroringActive = !(numberOfActiveDspys == numberOfOnlineDspys);
+    BOOL isMirroringActive = !(activeDisplayCount == onlineDisplayCount);
     
     switch (mode) {
         case toggle:
